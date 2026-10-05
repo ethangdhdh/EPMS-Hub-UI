@@ -1,0 +1,1138 @@
+-- EPM'S HUB GO FOLLOW MY CHANNEL ON TIKTOK [faze_cloak7787]
+-- Single LocalScript for Roblox Studio / Your Game
+
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+local GuiService = game:GetService("GuiService")
+local Lighting = game:GetService("Lighting")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local TweenService = game:GetService("TweenService")
+local Workspace = game:GetService("Workspace")
+
+local player = Players.LocalPlayer
+local playerGui = player:WaitForChild("PlayerGui")
+local camera = Workspace.CurrentCamera
+
+--==================================================
+-- SETTINGS & THEME
+--==================================================
+
+local UI_SCALE = UserInputService.TouchEnabled and 0.75 or 1
+local KEY_URL = "https://exquisite-shortbread-716c4f.netlify.app"
+local ADMIN_KEY = "EthanM1534" -- Master override key
+local SALT = "ethan-ui-v1"
+local ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
+
+local THEME = {
+	BG = Color3.fromRGB(14, 14, 18),
+	PANEL = Color3.fromRGB(20, 20, 26),
+	SIDEBAR = Color3.fromRGB(16, 16, 22),
+	ACCENT = Color3.fromRGB(0, 229, 255), -- Glowing Cyan
+	ACCENT_SECONDARY = Color3.fromRGB(138, 43, 226), -- Purple
+	BUTTON = Color3.fromRGB(28, 28, 36),
+	BUTTON_HOVER = Color3.fromRGB(38, 38, 48),
+	TEXT = Color3.fromRGB(240, 240, 245),
+	TEXT_DARK = Color3.fromRGB(150, 150, 165),
+	STROKE = Color3.fromRGB(45, 45, 60)
+}
+
+--==================================================
+-- HASH & KEY VERIFICATION LOGIC
+--==================================================
+
+local function base32Decode(input)
+	local result = {}
+	local buffer = 0
+	local bitsLeft = 0
+
+	for i = 1, #input do
+		local char = string.sub(input, i, i)
+		local val = string.find(ALPHABET, char, 1, true)
+		if val then
+			buffer = (buffer * 32) + (val - 1)
+			bitsLeft = bitsLeft + 5
+			if bitsLeft >= 8 then
+				bitsLeft = bitsLeft - 8
+				local byte = math.floor(buffer / (2 ^ bitsLeft)) % 256
+				table.insert(result, byte)
+			end
+		end
+	end
+	return result
+end
+
+local function verifyKey(key)
+	key = string.gsub(key, "%s+", "")
+	
+	-- Admin Key Check
+	if key == ADMIN_KEY then
+		return true
+	end
+	
+	key = string.upper(key)
+	if #key < 8 then return false end
+	
+	local bytes = base32Decode(key)
+	if #bytes < 4 then return false end
+	
+	local hashSum = 0
+	for i = 1, #bytes do
+		hashSum = (hashSum + bytes[i] * i) % 256
+	end
+	
+	return hashSum % 2 == 0
+end
+
+--==================================================
+-- SETTINGS & STATE
+--==================================================
+
+local ESP_ENABLED = false
+local AIM_ENABLED = false
+local LOCK_ENABLED = false
+local FLY_ENABLED = false
+local NOCLIP_ENABLED = false
+local GOD_ENABLED = false
+local INVIS_ENABLED = false
+local SUPER_JUMP_ENABLED = false
+
+local WALK_SPEED = 16
+local NORMAL_JUMP = 50
+local SUPER_JUMP = 120
+
+local FLY_SPEED = 55
+local verticalDirection = 0
+local selectedPlayer = nil
+local selectedIndex = 0
+
+local aimTarget = nil
+local highlights = {}
+local currentTab = "MAIN"
+
+-- Cache original transparency/states for clean invisibility restoration
+local savedCharacterStates = {}
+local godConnections = {}
+
+--==================================================
+-- REMOVE OLD UI
+--==================================================
+
+local oldGui = playerGui:FindFirstChild("EPM_Hub") or playerGui:FindFirstChild("Ethan")
+if oldGui then oldGui:Destroy() end
+
+--==================================================
+-- GUI INIT
+--==================================================
+
+local gui = Instance.new("ScreenGui")
+gui.Name = "EPM_Hub"
+gui.ResetOnSpawn = false
+gui.IgnoreGuiInset = true
+gui.DisplayOrder = 100
+gui.Parent = playerGui
+
+--==================================================
+-- KEY SYSTEM UI
+--==================================================
+
+local keyFrame = Instance.new("Frame")
+keyFrame.Name = "KeySystem"
+keyFrame.Size = UDim2.fromOffset(360, 230)
+keyFrame.Position = UDim2.new(0.5, -180, 0.5, -115)
+keyFrame.BackgroundColor3 = THEME.BG
+keyFrame.BorderSizePixel = 0
+keyFrame.Parent = gui
+
+local keyCorner = Instance.new("UICorner")
+keyCorner.CornerRadius = UDim.new(0, 12)
+keyCorner.Parent = keyFrame
+
+local keyStroke = Instance.new("UIStroke")
+keyStroke.Color = THEME.ACCENT
+keyStroke.Thickness = 1.5
+keyStroke.Transparency = 0.3
+keyStroke.Parent = keyFrame
+
+local keyTitle = Instance.new("TextLabel")
+keyTitle.Size = UDim2.new(1, -20, 0, 44)
+keyTitle.Position = UDim2.new(0, 10, 0, 4)
+keyTitle.Text = "⚡ EPM’S HUB — ACCESS"
+keyTitle.Font = Enum.Font.GothamBold
+keyTitle.TextColor3 = THEME.ACCENT
+keyTitle.TextSize = 14
+keyTitle.BackgroundTransparency = 1
+keyTitle.Parent = keyFrame
+
+local keySub = Instance.new("TextLabel")
+keySub.Size = UDim2.new(1, -20, 0, 28)
+keySub.Position = UDim2.new(0, 10, 0, 36)
+keySub.Text = "Go follow My Channel on TikTok [faze_cloak7787]"
+keySub.Font = Enum.Font.Gotham
+keySub.TextColor3 = THEME.TEXT_DARK
+keySub.TextSize = 10
+keySub.TextWrapped = true
+keySub.BackgroundTransparency = 1
+keySub.Parent = keyFrame
+
+local keyBox = Instance.new("TextBox")
+keyBox.Size = UDim2.new(0.86, 0, 0, 38)
+keyBox.Position = UDim2.new(0.07, 0, 0.42, 0)
+keyBox.PlaceholderText = "Paste Key / Passphrase..."
+keyBox.PlaceholderColor3 = Color3.fromRGB(100, 100, 115)
+keyBox.Text = ""
+keyBox.Font = Enum.Font.GothamMedium
+keyBox.TextColor3 = THEME.TEXT
+keyBox.TextSize = 12
+keyBox.BackgroundColor3 = THEME.PANEL
+keyBox.BorderSizePixel = 0
+keyBox.Parent = keyFrame
+
+local keyBoxCorner = Instance.new("UICorner")
+keyBoxCorner.CornerRadius = UDim.new(0, 8)
+keyBoxCorner.Parent = keyBox
+
+local keyBoxStroke = Instance.new("UIStroke")
+keyBoxStroke.Color = THEME.STROKE
+keyBoxStroke.Thickness = 1
+keyBoxStroke.Parent = keyBox
+
+local submitBtn = Instance.new("TextButton")
+submitBtn.Size = UDim2.new(0.41, 0, 0, 36)
+submitBtn.Position = UDim2.new(0.07, 0, 0.72, 0)
+submitBtn.Text = "UNLOCK"
+submitBtn.Font = Enum.Font.GothamBold
+submitBtn.TextColor3 = Color3.fromRGB(10, 10, 15)
+submitBtn.BackgroundColor3 = THEME.ACCENT
+submitBtn.BorderSizePixel = 0
+submitBtn.Parent = keyFrame
+
+local submitCorner = Instance.new("UICorner")
+submitCorner.CornerRadius = UDim.new(0, 8)
+submitCorner.Parent = submitBtn
+
+local getBtn = Instance.new("TextButton")
+getBtn.Size = UDim2.new(0.41, 0, 0, 36)
+getBtn.Position = UDim2.new(0.52, 0, 0.72, 0)
+getBtn.Text = "GET KEY"
+getBtn.Font = Enum.Font.GothamBold
+getBtn.TextColor3 = THEME.TEXT
+getBtn.BackgroundColor3 = THEME.BUTTON
+getBtn.BorderSizePixel = 0
+getBtn.Parent = keyFrame
+
+local getCorner = Instance.new("UICorner")
+getCorner.CornerRadius = UDim.new(0, 8)
+getCorner.Parent = getBtn
+
+local getStroke = Instance.new("UIStroke")
+getStroke.Color = THEME.STROKE
+getStroke.Thickness = 1
+getStroke.Parent = getBtn
+
+--==================================================
+-- MAIN WINDOW
+--==================================================
+
+local window = Instance.new("Frame")
+window.Name = "Window"
+window.Size = UDim2.fromOffset(350, 440)
+window.Position = UDim2.new(0.5, -175, 0.5, -220)
+window.BackgroundColor3 = THEME.BG
+window.BorderSizePixel = 0
+window.Visible = false
+window.Parent = gui
+
+local windowScale = Instance.new("UIScale")
+windowScale.Scale = UI_SCALE
+windowScale.Parent = window
+
+local windowCorner = Instance.new("UICorner")
+windowCorner.CornerRadius = UDim.new(0, 12)
+windowCorner.Parent = window
+
+local windowStroke = Instance.new("UIStroke")
+windowStroke.Color = THEME.ACCENT
+windowStroke.Thickness = 1.5
+windowStroke.Transparency = 0.5
+windowStroke.Parent = window
+
+-- MOBILE TOGGLE BUTTON
+local toggleBtn = Instance.new("TextButton")
+toggleBtn.Name = "EPMToggle"
+toggleBtn.Size = UDim2.fromOffset(52, 52)
+toggleBtn.Position = UDim2.new(0, 12, 0.2, 0)
+toggleBtn.BackgroundColor3 = THEME.BG
+toggleBtn.TextColor3 = THEME.ACCENT
+toggleBtn.Text = "EPM"
+toggleBtn.Font = Enum.Font.GothamBold
+toggleBtn.TextSize = 11
+toggleBtn.Visible = false
+toggleBtn.Parent = gui
+
+local toggleCorner = Instance.new("UICorner")
+toggleCorner.CornerRadius = UDim.new(1, 0)
+toggleCorner.Parent = toggleBtn
+
+local toggleStroke = Instance.new("UIStroke")
+toggleStroke.Color = THEME.ACCENT
+toggleStroke.Thickness = 1.5
+toggleStroke.Parent = toggleBtn
+
+toggleBtn.Activated:Connect(function()
+	window.Visible = not window.Visible
+end)
+
+-- DRAGGABLE LOGIC
+local function enableDragging(frame, dragHandle)
+	local dragging, dragInput, dragStart, startPos
+	dragHandle = dragHandle or frame
+
+	dragHandle.InputBegan:Connect(function(input)
+		if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+			dragging = true
+			dragStart = input.Position
+			startPos = frame.Position
+
+			input.Changed:Connect(function()
+				if input.UserInputState == Enum.UserInputState.End then
+					dragging = false
+				end
+			end)
+		end
+	end)
+
+	dragHandle.InputChanged:Connect(function(input)
+		if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
+			dragInput = input
+		end
+	end)
+
+	UserInputService.InputChanged:Connect(function(input)
+		if input == dragInput and dragging then
+			local delta = input.Position - dragStart
+			frame.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+		end
+	end)
+end
+
+enableDragging(window)
+enableDragging(toggleBtn)
+enableDragging(keyFrame)
+
+-- KEY SYSTEM ACTIONS
+getBtn.Activated:Connect(function()
+	if setclipboard then
+		setclipboard(KEY_URL)
+		getBtn.Text = "COPIED!"
+		task.delay(1.5, function() getBtn.Text = "GET KEY" end)
+	else
+		getBtn.Text = "URL IN CONSOLE"
+		print("EPM'S Hub Key URL: " .. KEY_URL)
+	end
+end)
+
+submitBtn.Activated:Connect(function()
+	if verifyKey(keyBox.Text) then
+		keyFrame:Destroy()
+		window.Visible = true
+		toggleBtn.Visible = true
+	else
+		submitBtn.Text = "INVALID KEY"
+		submitBtn.BackgroundColor3 = Color3.fromRGB(220, 50, 50)
+		submitBtn.TextColor3 = THEME.TEXT
+		task.delay(1.5, function()
+			submitBtn.Text = "UNLOCK"
+			submitBtn.BackgroundColor3 = THEME.ACCENT
+			submitBtn.TextColor3 = Color3.fromRGB(10, 10, 15)
+		end)
+	end
+end)
+
+--==================================================
+-- TITLE & SUBTITLE HEADER
+--==================================================
+
+local titleFrame = Instance.new("Frame")
+titleFrame.Name = "TitleFrame"
+titleFrame.Size = UDim2.new(1, 0, 0, 50)
+titleFrame.BackgroundColor3 = THEME.PANEL
+titleFrame.BorderSizePixel = 0
+titleFrame.Parent = window
+
+local titleCorner = Instance.new("UICorner")
+titleCorner.CornerRadius = UDim.new(0, 12)
+titleCorner.Parent = titleFrame
+
+local title = Instance.new("TextButton")
+title.Name = "Title"
+title.Size = UDim2.new(1, 0, 0, 24)
+title.Position = UDim2.new(0, 0, 0, 4)
+title.BackgroundTransparency = 1
+title.TextColor3 = THEME.TEXT
+title.Text = "EPM’S Hub ❖"
+title.Font = Enum.Font.GothamBold
+title.TextSize = 13
+title.AutoButtonColor = false
+title.Parent = titleFrame
+
+local subtitle = Instance.new("TextLabel")
+subtitle.Name = "Subtitle"
+subtitle.Size = UDim2.new(1, -10, 0, 18)
+subtitle.Position = UDim2.new(0, 5, 0, 26)
+subtitle.BackgroundTransparency = 1
+subtitle.TextColor3 = THEME.ACCENT
+subtitle.Text = "Go follow My Channel on TikTok [faze_cloak7787]"
+subtitle.Font = Enum.Font.GothamMedium
+subtitle.TextSize = 9
+subtitle.TextWrapped = true
+subtitle.Parent = titleFrame
+
+title.Activated:Connect(function()
+	window.Visible = false
+end)
+
+local sidebar = Instance.new("Frame")
+sidebar.Name = "Sidebar"
+sidebar.Size = UDim2.fromOffset(88, 388)
+sidebar.Position = UDim2.fromOffset(0, 52)
+sidebar.BackgroundColor3 = THEME.SIDEBAR
+sidebar.BorderSizePixel = 0
+sidebar.Parent = window
+
+local sideLayout = Instance.new("UIListLayout")
+sideLayout.Padding = UDim.new(0, 8)
+sideLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+sideLayout.Parent = sidebar
+
+local sidePadding = Instance.new("UIPadding")
+sidePadding.PaddingTop = UDim.new(0, 10)
+sidePadding.PaddingLeft = UDim.new(0, 6)
+sidePadding.PaddingRight = UDim.new(0, 6)
+sidePadding.Parent = sidebar
+
+--==================================================
+-- PANEL SYSTEM HELPERS
+--==================================================
+
+local tabButtons = {}
+
+local function makeButton(parent, text, height)
+	local button = Instance.new("TextButton")
+	button.Size = UDim2.new(1, 0, 0, height or 38)
+	button.BackgroundColor3 = THEME.BUTTON
+	button.TextColor3 = THEME.TEXT
+	button.Text = text
+	button.Font = Enum.Font.GothamBold
+	button.TextSize = 11
+	button.BorderSizePixel = 0
+	button.Parent = parent
+
+	local corner = Instance.new("UICorner")
+	corner.CornerRadius = UDim.new(0, 8)
+	corner.Parent = button
+
+	local stroke = Instance.new("UIStroke")
+	stroke.Color = THEME.STROKE
+	stroke.Thickness = 1
+	stroke.Parent = button
+
+	return button
+end
+
+local panels = {}
+
+local function createPanel(name)
+	local panel = Instance.new("ScrollingFrame")
+	panel.Name = name
+	panel.Size = UDim2.new(1, -98, 1, -60)
+	panel.Position = UDim2.fromOffset(94, 56)
+	panel.BackgroundTransparency = 1
+	panel.BorderSizePixel = 0
+	panel.ScrollBarThickness = 3
+	panel.ScrollBarImageColor3 = THEME.ACCENT
+	panel.CanvasSize = UDim2.new()
+	panel.AutomaticCanvasSize = Enum.AutomaticSize.Y
+	panel.Visible = false
+	panel.Parent = window
+
+	local layout = Instance.new("UIListLayout")
+	layout.Padding = UDim.new(0, 8)
+	layout.Parent = panel
+
+	local padding = Instance.new("UIPadding")
+	padding.PaddingTop = UDim.new(0, 2)
+	padding.PaddingBottom = UDim.new(0, 10)
+	padding.PaddingLeft = UDim.new(0, 2)
+	padding.PaddingRight = UDim.new(0, 6)
+	padding.Parent = panel
+
+	panels[name] = panel
+	return panel
+end
+
+local mainPanel = createPanel("MAIN")
+local tpPanel = createPanel("TP")
+local flyPanel = createPanel("FLY")
+
+local mainTab = makeButton(sidebar, "MAIN", 40)
+local tpTab = makeButton(sidebar, "TP", 40)
+local flyTab = makeButton(sidebar, "FLY", 40)
+
+tabButtons["MAIN"] = mainTab
+tabButtons["TP"] = tpTab
+tabButtons["FLY"] = flyTab
+
+local function showTab(tabName)
+	currentTab = tabName
+	for name, panel in pairs(panels) do
+		panel.Visible = (name == tabName)
+	end
+	
+	for name, btn in pairs(tabButtons) do
+		if name == tabName then
+			btn.BackgroundColor3 = THEME.ACCENT
+			btn.TextColor3 = Color3.fromRGB(10, 10, 15)
+		else
+			btn.BackgroundColor3 = THEME.BUTTON
+			btn.TextColor3 = THEME.TEXT
+		end
+	end
+end
+
+mainTab.Activated:Connect(function() showTab("MAIN") end)
+tpTab.Activated:Connect(function() showTab("TP") end)
+flyTab.Activated:Connect(function() showTab("FLY") end)
+showTab("MAIN")
+
+--==================================================
+-- HELPER FUNCTIONS FOR PLAYERS & TARGETING
+--==================================================
+
+local function getOtherPlayers()
+	local list = {}
+	for _, target in ipairs(Players:GetPlayers()) do
+		if target ~= player then table.insert(list, target) end
+	end
+	return list
+end
+
+local function hasWeapon(character)
+	if not character then return false end
+	for _, item in ipairs(character:GetChildren()) do
+		if item:IsA("Tool") then
+			return true
+		end
+	end
+	return false
+end
+
+local function getClosestArmedPlayer(maxDistance)
+	maxDistance = maxDistance or 500
+	local myChar = player.Character
+	if not myChar or not myChar:FindFirstChild("HumanoidRootPart") then return nil end
+
+	local myPos = myChar.HumanoidRootPart.Position
+	local closestChar = nil
+	local shortestDistance = maxDistance
+
+	for _, target in ipairs(Players:GetPlayers()) do
+		if target ~= player and target.Character then
+			local char = target.Character
+			local root = char:FindFirstChild("HumanoidRootPart")
+			local hum = char:FindFirstChildOfClass("Humanoid")
+			
+			if root and hum and hum.Health > 0 and hasWeapon(char) then
+				local dist = (root.Position - myPos).Magnitude
+				if dist < shortestDistance then
+					shortestDistance = dist
+					closestChar = char
+				end
+			end
+		end
+	end
+	return closestChar
+end
+
+-- BULLET NO-CLIP / PROJECTILE COLLISION BYPASS HOOK
+Workspace.ChildAdded:Connect(function(child)
+	if AIM_ENABLED or LOCK_ENABLED then
+		task.spawn(function()
+			if child:IsA("BasePart") then
+				child.CanCollide = false
+			else
+				for _, desc in ipairs(child:GetDescendants()) do
+					if desc:IsA("BasePart") then
+						desc.CanCollide = false
+					end
+				end
+			end
+		end)
+	end
+end)
+
+-- Helper to set visibility across character items
+local function setCharacterInvisibility(state)
+	local char = player.Character
+	if not char then return end
+
+	if state then
+		for _, v in ipairs(char:GetDescendants()) do
+			if v:IsA("BasePart") then
+				if not savedCharacterStates[v] then
+					savedCharacterStates[v] = { Transparency = v.Transparency }
+				end
+				v.Transparency = 1
+				v.LocalTransparencyModifier = 0.5
+			elseif v:IsA("Decal") or v:IsA("Texture") then
+				if not savedCharacterStates[v] then
+					savedCharacterStates[v] = { Transparency = v.Transparency }
+				end
+				v.Transparency = 1
+			elseif v:IsA("ParticleEmitter") or v:IsA("Trail") or v:IsA("Light") then
+				if not savedCharacterStates[v] then
+					savedCharacterStates[v] = { Enabled = v.Enabled }
+				end
+				v.Enabled = false
+			end
+		end
+	else
+		for obj, props in pairs(savedCharacterStates) do
+			if obj and obj.Parent then
+				if props.Transparency ~= nil then
+					obj.Transparency = props.Transparency
+					if obj:IsA("BasePart") then
+						obj.LocalTransparencyModifier = props.Transparency
+					end
+				end
+				if props.Enabled ~= nil then
+					obj.Enabled = props.Enabled
+				end
+			end
+		end
+		savedCharacterStates = {}
+	end
+end
+
+-- ADVANCED GOD MODE HANDLER (Bypasses Local Health Overrides)
+local function applyGodMode(char)
+	if not char then return end
+	local hum = char:WaitForChild("Humanoid", 3)
+	if not hum then return end
+
+	-- Clean up existing connections
+	for _, conn in ipairs(godConnections) do
+		conn:Disconnect()
+	end
+	godConnections = {}
+
+	if GOD_ENABLED then
+		-- Lock damage state types
+		hum:SetStateEnabled(Enum.HumanoidStateType.Dead, false)
+		hum:SetStateEnabled(Enum.HumanoidStateType.FallingDown, false)
+		hum:SetStateEnabled(Enum.HumanoidStateType.Ragdoll, false)
+
+		-- Continuously restore health on change
+		local healthConn = hum.HealthChanged:Connect(function(newHealth)
+			if GOD_ENABLED and newHealth < hum.MaxHealth then
+				hum.Health = hum.MaxHealth
+			end
+		end)
+		table.insert(godConnections, healthConn)
+
+		-- Prevent breakage/death if server forces health to 0
+		local stateConn = hum.StateChanged:Connect(function(_, new)
+			if GOD_ENABLED and new == Enum.HumanoidStateType.Dead then
+				hum:ChangeState(Enum.HumanoidStateType.Running)
+				hum.Health = hum.MaxHealth
+			end
+		end)
+		table.insert(godConnections, stateConn)
+		
+		hum.Health = hum.MaxHealth
+	else
+		hum:SetStateEnabled(Enum.HumanoidStateType.Dead, true)
+		hum:SetStateEnabled(Enum.HumanoidStateType.FallingDown, true)
+		hum:SetStateEnabled(Enum.HumanoidStateType.Ragdoll, true)
+	end
+end
+
+-- Auto re-apply on character re-spawn
+player.CharacterAdded:Connect(function(newChar)
+	task.wait(0.2)
+	if GOD_ENABLED then
+		applyGodMode(newChar)
+	end
+end)
+
+--==================================================
+-- MAIN PANEL FEATURES
+--==================================================
+
+local selectPlayerButton = makeButton(mainPanel, "SELECT PLAYER", 38)
+local teleportButton = makeButton(mainPanel, "TELEPORT TO PLAYER", 38)
+local espButton = makeButton(mainPanel, "ESP: OFF", 38)
+local aimButton = makeButton(mainPanel, "AIMBOT: OFF", 38)
+local lockButton = makeButton(mainPanel, "LOCK ON: OFF", 38)
+local noclipButton = makeButton(mainPanel, "NOCLIP: OFF", 38)
+local invincibleButton = makeButton(mainPanel, "INVINCIBLE: OFF", 38)
+local invisibleButton = makeButton(mainPanel, "INVISIBLE: OFF", 38)
+local jumpButton = makeButton(mainPanel, "JUMP POWER: NORMAL", 38)
+
+-- SPEED HACK SLIDER
+local walkSpeedLabel = Instance.new("TextLabel")
+walkSpeedLabel.Size = UDim2.new(1, 0, 0, 20)
+walkSpeedLabel.BackgroundTransparency = 1
+walkSpeedLabel.TextColor3 = THEME.TEXT
+walkSpeedLabel.Font = Enum.Font.GothamBold
+walkSpeedLabel.TextSize = 11
+walkSpeedLabel.Text = "WALKSPEED: " .. WALK_SPEED
+walkSpeedLabel.TextXAlignment = Enum.TextXAlignment.Left
+walkSpeedLabel.Parent = mainPanel
+
+local walkSpeedSlider = Instance.new("Frame")
+walkSpeedSlider.Size = UDim2.new(1, 0, 0, 16)
+walkSpeedSlider.BackgroundColor3 = THEME.PANEL
+walkSpeedSlider.BorderSizePixel = 0
+walkSpeedSlider.Active = true
+walkSpeedSlider.Parent = mainPanel
+
+local walkSpeedCorner = Instance.new("UICorner")
+walkSpeedCorner.CornerRadius = UDim.new(0, 8)
+walkSpeedCorner.Parent = walkSpeedSlider
+
+local walkSpeedFill = Instance.new("Frame")
+walkSpeedFill.Size = UDim2.new(math.clamp((WALK_SPEED - 16) / 184, 0, 1), 0, 1, 0)
+walkSpeedFill.BackgroundColor3 = THEME.ACCENT
+walkSpeedFill.BorderSizePixel = 0
+walkSpeedFill.Parent = walkSpeedSlider
+
+local walkSpeedFillCorner = Instance.new("UICorner")
+walkSpeedFillCorner.CornerRadius = UDim.new(0, 8)
+walkSpeedFillCorner.Parent = walkSpeedFill
+
+local walkSpeedKnob = Instance.new("Frame")
+walkSpeedKnob.Size = UDim2.fromOffset(16, 16)
+walkSpeedKnob.AnchorPoint = Vector2.new(0.5, 0.5)
+walkSpeedKnob.Position = UDim2.new(math.clamp((WALK_SPEED - 16) / 184, 0, 1), 0, 0.5, 0)
+walkSpeedKnob.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+walkSpeedKnob.BorderSizePixel = 0
+walkSpeedKnob.Active = true
+walkSpeedKnob.Parent = walkSpeedSlider
+
+local walkSpeedKnobCorner = Instance.new("UICorner")
+walkSpeedKnobCorner.CornerRadius = UDim.new(1, 0)
+walkSpeedKnobCorner.Parent = walkSpeedKnob
+
+local walkSpeedDragging = false
+
+local function updateWalkSpeed(inputX)
+	local sliderX = walkSpeedSlider.AbsolutePosition.X
+	local sliderWidth = walkSpeedSlider.AbsoluteSize.X
+	if sliderWidth <= 0 then return end
+
+	local percent = math.clamp((inputX - sliderX) / sliderWidth, 0, 1)
+	WALK_SPEED = math.floor(16 + (184 * percent) + 0.5)
+
+	walkSpeedLabel.Text = "WALKSPEED: " .. WALK_SPEED
+	walkSpeedFill.Size = UDim2.new(percent, 0, 1, 0)
+	walkSpeedKnob.Position = UDim2.new(percent, 0, 0.5, 0)
+end
+
+local function isSliderInput(input)
+	return input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1
+end
+
+walkSpeedSlider.InputBegan:Connect(function(input)
+	if isSliderInput(input) then walkSpeedDragging = true updateWalkSpeed(input.Position.X) end
+end)
+
+walkSpeedSlider.InputEnded:Connect(function(input)
+	if isSliderInput(input) then walkSpeedDragging = false end
+end)
+
+walkSpeedKnob.InputBegan:Connect(function(input)
+	if isSliderInput(input) then walkSpeedDragging = true updateWalkSpeed(input.Position.X) end
+end)
+
+walkSpeedKnob.InputEnded:Connect(function(input)
+	if isSliderInput(input) then walkSpeedDragging = false end
+end)
+
+UserInputService.InputChanged:Connect(function(input)
+	if walkSpeedDragging and (input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseMovement) then
+		updateWalkSpeed(input.Position.X)
+	end
+end)
+
+local function refreshPlayerSelection()
+	local list = getOtherPlayers()
+	if #list == 0 then
+		selectedPlayer = nil
+		selectedIndex = 0
+		selectPlayerButton.Text = "NO OTHER PLAYERS"
+		return
+	end
+	if selectedIndex < 1 or selectedIndex > #list then selectedIndex = 1 end
+	selectedPlayer = list[selectedIndex]
+	selectPlayerButton.Text = "PLAYER: " .. selectedPlayer.Name
+end
+
+selectPlayerButton.Activated:Connect(function()
+	local list = getOtherPlayers()
+	if #list == 0 then return end
+	selectedIndex = (selectedIndex % #list) + 1
+	refreshPlayerSelection()
+end)
+
+teleportButton.Activated:Connect(function()
+	if selectedPlayer and selectedPlayer.Character and selectedPlayer.Character:FindFirstChild("HumanoidRootPart") then
+		local myRoot = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
+		if myRoot then
+			myRoot.CFrame = selectedPlayer.Character.HumanoidRootPart.CFrame + Vector3.new(0, 3, 0)
+		end
+	end
+end)
+
+espButton.Activated:Connect(function()
+	ESP_ENABLED = not ESP_ENABLED
+	espButton.Text = "ESP: " .. (ESP_ENABLED and "ON" or "OFF")
+	if not ESP_ENABLED then
+		for _, highlight in pairs(highlights) do highlight:Destroy() end
+		highlights = {}
+	end
+end)
+
+aimButton.Activated:Connect(function()
+	AIM_ENABLED = not AIM_ENABLED
+	aimButton.Text = "AIMBOT: " .. (AIM_ENABLED and "ON" or "OFF")
+	if not AIM_ENABLED and not LOCK_ENABLED then
+		camera.CameraType = Enum.CameraType.Custom
+	end
+end)
+
+lockButton.Activated:Connect(function()
+	LOCK_ENABLED = not LOCK_ENABLED
+
+	if LOCK_ENABLED then
+		if selectedPlayer and selectedPlayer.Character and hasWeapon(selectedPlayer.Character) then
+			aimTarget = selectedPlayer.Character
+		else
+			aimTarget = getClosestArmedPlayer(500)
+		end
+
+		if aimTarget then
+			lockButton.Text = "LOCK ON: ON"
+		else
+			LOCK_ENABLED = false
+			lockButton.Text = "NO ARMED TARGETS"
+			task.delay(1.2, function() lockButton.Text = "LOCK ON: OFF" end)
+		end
+	else
+		aimTarget = nil
+		camera.CameraType = Enum.CameraType.Custom
+		lockButton.Text = "LOCK ON: OFF"
+	end
+end)
+
+noclipButton.Activated:Connect(function()
+	NOCLIP_ENABLED = not NOCLIP_ENABLED
+	noclipButton.Text = "NOCLIP: " .. (NOCLIP_ENABLED and "ON" or "OFF")
+end)
+
+invincibleButton.Activated:Connect(function()
+	GOD_ENABLED = not GOD_ENABLED
+	invincibleButton.Text = "INVINCIBLE: " .. (GOD_ENABLED and "ON" or "OFF")
+	applyGodMode(player.Character)
+end)
+
+invisibleButton.Activated:Connect(function()
+	INVIS_ENABLED = not INVIS_ENABLED
+	invisibleButton.Text = "INVISIBLE: " .. (INVIS_ENABLED and "ON" or "OFF")
+	setCharacterInvisibility(INVIS_ENABLED)
+end)
+
+jumpButton.Activated:Connect(function()
+	SUPER_JUMP_ENABLED = not SUPER_JUMP_ENABLED
+	jumpButton.Text = "JUMP POWER: " .. (SUPER_JUMP_ENABLED and "BOOSTED" or "NORMAL")
+end)
+
+-- CONTINUOUS CHARACTER ATTR LOOP (SPEED, JUMP, NOCLIP & INVISIBILITY)
+RunService.Stepped:Connect(function()
+	local char = player.Character
+	if char then
+		local hum = char:FindFirstChildOfClass("Humanoid")
+		if hum then
+			-- Enforce Speed & Jump
+			hum.WalkSpeed = WALK_SPEED
+			hum.UseJumpPower = true
+			hum.JumpPower = SUPER_JUMP_ENABLED and SUPER_JUMP or NORMAL_JUMP
+
+			if GOD_ENABLED then
+				if hum.Health < hum.MaxHealth then
+					hum.Health = hum.MaxHealth
+				end
+				hum:SetStateEnabled(Enum.HumanoidStateType.Dead, false)
+			end
+		end
+
+		if INVIS_ENABLED then
+			setCharacterInvisibility(true)
+		end
+
+		if NOCLIP_ENABLED then
+			for _, part in ipairs(char:GetDescendants()) do
+				if part:IsA("BasePart") and part.CanCollide then
+					part.CanCollide = false
+				end
+			end
+		end
+	end
+end)
+
+-- RENDERSTEPPED LOOP (ESP, ENHANCED CORNER TRACKING AIMBOT, & LOCK ON)
+RunService.RenderStepped:Connect(function(dt)
+	if ESP_ENABLED then
+		for _, target in ipairs(getOtherPlayers()) do
+			if target.Character and not highlights[target] then
+				local hl = Instance.new("Highlight")
+				hl.FillColor = THEME.ACCENT
+				hl.OutlineColor = THEME.ACCENT
+				hl.Parent = target.Character
+				highlights[target] = hl
+			end
+		end
+	end
+
+	if AIM_ENABLED and not LOCK_ENABLED then
+		local targetChar = getClosestArmedPlayer(500)
+		if targetChar then
+			local aimPart = targetChar:FindFirstChild("Head") or targetChar:FindFirstChild("HumanoidRootPart")
+			if aimPart then
+				local targetPos = aimPart.Position
+				local targetCFrame = CFrame.lookAt(camera.CFrame.Position, targetPos)
+				camera.CFrame = camera.CFrame:Lerp(targetCFrame, math.min(dt * 25, 1))
+			end
+		end
+	end
+
+	if LOCK_ENABLED then
+		if aimTarget and aimTarget:FindFirstChild("HumanoidRootPart") and hasWeapon(aimTarget) then
+			local targetHum = aimTarget:FindFirstChildOfClass("Humanoid")
+			local myChar = player.Character
+			local myRoot = myChar and myChar:FindFirstChild("HumanoidRootPart")
+
+			if targetHum and targetHum.Health > 0 and myRoot then
+				local targetPart = aimTarget:FindFirstChild("Head") or aimTarget.HumanoidRootPart
+				camera.CameraType = Enum.CameraType.Scriptable
+				
+				local goalCFrame = CFrame.lookAt(camera.CFrame.Position, targetPart.Position)
+				camera.CFrame = camera.CFrame:Lerp(goalCFrame, math.min(dt * 25, 1))
+			else
+				LOCK_ENABLED = false
+				aimTarget = nil
+				camera.CameraType = Enum.CameraType.Custom
+				lockButton.Text = "LOCK ON: OFF"
+			end
+		else
+			LOCK_ENABLED = false
+			aimTarget = nil
+			camera.CameraType = Enum.CameraType.Custom
+			lockButton.Text = "LOCK ON: OFF"
+		end
+	end
+end)
+
+--==================================================
+-- FLY PANEL
+--==================================================
+
+local flyButton = makeButton(flyPanel, "FLY: OFF", 38)
+
+local flySpeedLabel = Instance.new("TextLabel")
+flySpeedLabel.Size = UDim2.new(1, 0, 0, 22)
+flySpeedLabel.BackgroundTransparency = 1
+flySpeedLabel.TextColor3 = THEME.TEXT
+flySpeedLabel.Font = Enum.Font.GothamBold
+flySpeedLabel.TextSize = 11
+flySpeedLabel.Text = "FLY SPEED: " .. FLY_SPEED
+flySpeedLabel.TextXAlignment = Enum.TextXAlignment.Left
+flySpeedLabel.Parent = flyPanel
+
+local flySpeedSlider = Instance.new("Frame")
+flySpeedSlider.Size = UDim2.new(1, 0, 0, 16)
+flySpeedSlider.BackgroundColor3 = THEME.PANEL
+flySpeedSlider.BorderSizePixel = 0
+flySpeedSlider.Active = true
+flySpeedSlider.Parent = flyPanel
+
+local flySpeedCorner = Instance.new("UICorner")
+flySpeedCorner.CornerRadius = UDim.new(0, 8)
+flySpeedCorner.Parent = flySpeedSlider
+
+local flySpeedFill = Instance.new("Frame")
+flySpeedFill.Size = UDim2.new(math.clamp((FLY_SPEED - 10) / 190, 0, 1), 0, 1, 0)
+flySpeedFill.BackgroundColor3 = THEME.ACCENT
+flySpeedFill.BorderSizePixel = 0
+flySpeedFill.Parent = flySpeedSlider
+
+local flySpeedFillCorner = Instance.new("UICorner")
+flySpeedFillCorner.CornerRadius = UDim.new(0, 8)
+flySpeedFillCorner.Parent = flySpeedFill
+
+local flySpeedKnob = Instance.new("Frame")
+flySpeedKnob.Size = UDim2.fromOffset(16, 16)
+flySpeedKnob.AnchorPoint = Vector2.new(0.5, 0.5)
+flySpeedKnob.Position = UDim2.new(math.clamp((FLY_SPEED - 10) / 190, 0, 1), 0, 0.5, 0)
+flySpeedKnob.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+flySpeedKnob.BorderSizePixel = 0
+flySpeedKnob.Active = true
+flySpeedKnob.Parent = flySpeedSlider
+
+local flySpeedKnobCorner = Instance.new("UICorner")
+flySpeedKnobCorner.CornerRadius = UDim.new(1, 0)
+flySpeedKnobCorner.Parent = flySpeedKnob
+
+local flySpeedDragging = false
+
+local function updateFlySpeed(inputX)
+	local sliderX = flySpeedSlider.AbsolutePosition.X
+	local sliderWidth = flySpeedSlider.AbsoluteSize.X
+	if sliderWidth <= 0 then return end
+
+	local percent = math.clamp((inputX - sliderX) / sliderWidth, 0, 1)
+	FLY_SPEED = math.floor(10 + (190 * percent) + 0.5)
+
+	flySpeedLabel.Text = "FLY SPEED: " .. FLY_SPEED
+	flySpeedFill.Size = UDim2.new(percent, 0, 1, 0)
+	flySpeedKnob.Position = UDim2.new(percent, 0, 0.5, 0)
+end
+
+flySpeedSlider.InputBegan:Connect(function(input)
+	if isSliderInput(input) then flySpeedDragging = true updateFlySpeed(input.Position.X) end
+end)
+
+flySpeedSlider.InputEnded:Connect(function(input)
+	if isSliderInput(input) then flySpeedDragging = false end
+end)
+
+flySpeedKnob.InputBegan:Connect(function(input)
+	if isSliderInput(input) then flySpeedDragging = true updateFlySpeed(input.Position.X) end
+end)
+
+flySpeedKnob.InputEnded:Connect(function(input)
+	if isSliderInput(input) then flySpeedDragging = false end
+end)
+
+UserInputService.InputChanged:Connect(function(input)
+	if flySpeedDragging and (input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseMovement) then
+		updateFlySpeed(input.Position.X)
+	end
+end)
+
+local upButton = makeButton(flyPanel, "▲ HOLD UP", 38)
+local downButton = makeButton(flyPanel, "▼ HOLD DOWN", 38)
+
+local function getHumanoid()
+	return player.Character and player.Character:FindFirstChildOfClass("Humanoid")
+end
+
+local function getRoot()
+	return player.Character and player.Character:FindFirstChild("HumanoidRootPart")
+end
+
+flyButton.Activated:Connect(function()
+	FLY_ENABLED = not FLY_ENABLED
+	flyButton.Text = "FLY: " .. (FLY_ENABLED and "ON" or "OFF")
+
+	local humanoid = getHumanoid()
+	if humanoid then humanoid.PlatformStand = FLY_ENABLED end
+
+	if not FLY_ENABLED then
+		verticalDirection = 0
+		local root = getRoot()
+		if root then root.AssemblyLinearVelocity = Vector3.zero end
+	end
+end)
+
+RunService.RenderStepped:Connect(function()
+	if not FLY_ENABLED then return end
+	local humanoid = getHumanoid()
+	local root = getRoot()
+	if not humanoid or not root then return end
+
+	humanoid.PlatformStand = true
+	local velocity = humanoid.MoveDirection * FLY_SPEED
+	velocity += Vector3.new(0, verticalDirection * FLY_SPEED, 0)
+	root.AssemblyLinearVelocity = velocity
+end)
+
+local function validPress(input)
+	return input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1
+end
+
+upButton.InputBegan:Connect(function(input) if validPress(input) then verticalDirection = 1 end end)
+upButton.InputEnded:Connect(function(input) if validPress(input) and verticalDirection == 1 then verticalDirection = 0 end end)
+downButton.InputBegan:Connect(function(input) if validPress(input) then verticalDirection = -1 end end)
+downButton.InputEnded:Connect(function(input) if validPress(input) and verticalDirection == -1 then verticalDirection = 0 end end)
+
+--==================================================
+-- TP PANEL FEATURES
+--==================================================
+
+local checkpointButton = makeButton(tpPanel, "AUTO CHECKPOINTS: OFF", 38)
+local skipButton = makeButton(tpPanel, "TP TO LAST SLOT", 38)
+
+local CHECKPOINT_DELAY = 0.3
+local checkpointRunning = false
+
+local function getCheckpoints()
+	local entries = {}
+	for _, item in ipairs(workspace:GetDescendants()) do
+		if item:IsA("BasePart") or item:IsA("SpawnLocation") or item:IsA("Model") then
+			local num = tonumber(string.match(item.Name, "%d+"))
+			if num then table.insert(entries, { item = item, number = num }) end
+		end
+	end
+	table.sort(entries, function(a, b) return a.number < b.number end)
+	return entries
+end
+
+checkpointButton.Activated:Connect(function()
+	checkpointRunning = not checkpointRunning
+	checkpointButton.Text = "AUTO CHECKPOINTS: " .. (checkpointRunning and "ON" or "OFF")
+
+	if checkpointRunning then
+		task.spawn(function()
+			local points = getCheckpoints()
+			for _, entry in ipairs(points) do
+				if not checkpointRunning then break end
+				local root = getRoot()
+				if root and entry.item then
+					local targetCF = entry.item:IsA("Model") and entry.item:GetPivot() or entry.item.CFrame
+					root.CFrame = targetCF + Vector3.new(0, 3, 0)
+					task.wait(CHECKPOINT_DELAY)
+				end
+			end
+			checkpointRunning = false
+			checkpointButton.Text = "AUTO CHECKPOINTS: OFF"
+		end)
+	end
+end)
+
+skipButton.Activated:Connect(function()
+	local points = getCheckpoints()
+	if #points > 0 then
+		local last = points[#points]
+		local root = getRoot()
+		if root and last.item then
+			local targetCF = last.item:IsA("Model") and last.item:GetPivot() or last.item.CFrame
+			root.CFrame = targetCF + Vector3.new(0, 3, 0)
+			skipButton.Text = "TELEPORTED TO END!"
+			task.delay(1.5, function() skipButton.Text = "TP TO LAST SLOT" end)
+		end
+	else
+		skipButton.Text = "NO CHECKPOINTS FOUND"
+		task.delay(1.5, function() skipButton.Text = "TP TO LAST SLOT" end)
+	end
+end)
